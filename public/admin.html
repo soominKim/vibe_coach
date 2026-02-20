@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>관리자 대시보드 - 태재 바이브 코딩 아카데미</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- 헤더 -->
+  <div class="header">
+    <div class="header-left">
+      <h1>태재 바이브 코딩 아카데미</h1>
+      <span class="badge">관리자</span>
+    </div>
+    <button class="refresh-btn" id="logoutBtn" onclick="logout()" style="display:none">로그아웃</button>
+  </div>
+
+  <!-- 로그인 폼 -->
+  <div class="admin-login" id="loginSection">
+    <div class="modal" style="position:static; box-shadow:var(--shadow-lg)">
+      <h2>관리자 로그인</h2>
+      <p>대화 기록을 열람하려면 관리자 비밀번호를 입력하세요.</p>
+      <input type="password" id="passwordInput" placeholder="비밀번호 입력" autocomplete="off">
+      <div id="loginError" style="color:var(--error); font-size:13px; margin-top:8px; display:none"></div>
+      <button onclick="login()">로그인</button>
+    </div>
+  </div>
+
+  <!-- 대시보드 -->
+  <div class="admin-dashboard hidden" id="dashboard">
+    <!-- 사이드바 - 사용자 목록 -->
+    <div class="sidebar">
+      <div class="sidebar-header">
+        <h3>참여자 목록</h3>
+        <button class="refresh-btn" onclick="loadSessions()">새로고침</button>
+      </div>
+      <div class="session-list" id="sessionList">
+        <div class="empty-state">참여자가 없습니다</div>
+      </div>
+    </div>
+
+    <!-- 대화 뷰어 -->
+    <div class="conversation-viewer">
+      <div class="viewer-header" id="viewerHeader" style="display:none">
+        <h3 id="viewerTitle">사용자 선택</h3>
+        <div class="viewer-tabs">
+          <button class="viewer-tab active" data-tab="1" onclick="switchViewerTab(1)">Task 1</button>
+          <button class="viewer-tab" data-tab="2" onclick="switchViewerTab(2)">Task 2</button>
+          <button class="viewer-tab" data-tab="3" onclick="switchViewerTab(3)">Task 3</button>
+        </div>
+      </div>
+      <div class="viewer-messages" id="viewerMessages">
+        <div class="empty-state">좌측에서 참여자를 선택하세요</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ============================================
+    // 상태
+    // ============================================
+    let token = localStorage.getItem('adminToken');
+    let sessions = [];
+    let currentSessionId = null;
+    let currentViewerTab = 1;
+    let sessionMessages = {};
+
+    // ============================================
+    // 초기화
+    // ============================================
+    function init() {
+      if (token) {
+        showDashboard();
+        loadSessions();
+      }
+
+      document.getElementById('passwordInput').addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') login();
+      });
+    }
+
+    // ============================================
+    // 로그인 / 로그아웃
+    // ============================================
+    async function login() {
+      const password = document.getElementById('passwordInput').value;
+      const errorEl = document.getElementById('loginError');
+
+      if (!password) return;
+
+      try {
+        const res = await fetch('/api/admin/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password }),
+        });
+
+        const data = await res.json();
+
+        if (res.ok) {
+          token = data.token;
+          localStorage.setItem('adminToken', token);
+          errorEl.style.display = 'none';
+          showDashboard();
+          loadSessions();
+        } else {
+          errorEl.textContent = data.error;
+          errorEl.style.display = 'block';
+        }
+      } catch {
+        errorEl.textContent = '서버에 연결할 수 없습니다.';
+        errorEl.style.display = 'block';
+      }
+    }
+
+    function logout() {
+      token = null;
+      localStorage.removeItem('adminToken');
+      document.getElementById('loginSection').classList.remove('hidden');
+      document.getElementById('dashboard').classList.add('hidden');
+      document.getElementById('logoutBtn').style.display = 'none';
+      document.getElementById('passwordInput').value = '';
+    }
+
+    function showDashboard() {
+      document.getElementById('loginSection').classList.add('hidden');
+      document.getElementById('dashboard').classList.remove('hidden');
+      document.getElementById('logoutBtn').style.display = 'block';
+    }
+
+    // ============================================
+    // 세션 목록 로드
+    // ============================================
+    async function loadSessions() {
+      try {
+        const res = await fetch('/api/admin/sessions', {
+          headers: { 'Authorization': `Bearer ${token}` },
+        });
+
+        if (res.status === 401) {
+          logout();
+          return;
+        }
+
+        const data = await res.json();
+        sessions = data.sessions;
+        renderSessionList();
+      } catch {
+        console.error('세션 목록 로드 실패');
+      }
+    }
+
+    function renderSessionList() {
+      const list = document.getElementById('sessionList');
+
+      if (sessions.length === 0) {
+        list.innerHTML = '<div class="empty-state">참여자가 없습니다</div>';
+        return;
+      }
+
+      list.innerHTML = sessions.map((s) => `
+        <div class="session-item ${s.id === currentSessionId ? 'active' : ''}"
+             onclick="selectSession('${s.id}')">
+          <div class="nickname">${escapeHtml(s.nickname)}</div>
+          <div class="meta">메시지 ${s.message_count}개 · ${formatTime(s.last_active || s.created_at)}</div>
+        </div>
+      `).join('');
+    }
+
+    // ============================================
+    // 세션 대화 로드
+    // ============================================
+    async function selectSession(sessionId) {
+      currentSessionId = sessionId;
+      currentViewerTab = 1;
+
+      // 사이드바 활성화 표시
+      renderSessionList();
+
+      // 헤더 표시
+      const session = sessions.find((s) => s.id === sessionId);
+      document.getElementById('viewerHeader').style.display = 'block';
+      document.getElementById('viewerTitle').textContent = session ? session.nickname : '사용자';
+
+      // 탭 초기화
+      document.querySelectorAll('.viewer-tab').forEach((t) => {
+        t.classList.toggle('active', parseInt(t.dataset.tab) === 1);
+      });
+
+      try {
+        const res = await fetch(`/api/admin/sessions/${sessionId}`, {
+          headers: { 'Authorization': `Bearer ${token}` },
+        });
+
+        if (res.status === 401) {
+          logout();
+          return;
+        }
+
+        const data = await res.json();
+        sessionMessages = data.messages;
+        renderMessages();
+      } catch {
+        console.error('대화 기록 로드 실패');
+      }
+    }
+
+    function switchViewerTab(tab) {
+      currentViewerTab = tab;
+      document.querySelectorAll('.viewer-tab').forEach((t) => {
+        t.classList.toggle('active', parseInt(t.dataset.tab) === tab);
+      });
+      renderMessages();
+    }
+
+    function renderMessages() {
+      const container = document.getElementById('viewerMessages');
+      const messages = sessionMessages[currentViewerTab] || [];
+
+      if (messages.length === 0) {
+        container.innerHTML = '<div class="empty-state">이 탭에 대화 기록이 없습니다</div>';
+        return;
+      }
+
+      container.innerHTML = messages.map((msg) => `
+        <div class="message ${msg.role}">
+          <div class="message-avatar">${msg.role === 'user' ? 'U' : 'AI'}</div>
+          <div class="message-bubble">
+            ${msg.role === 'assistant' ? renderMarkdown(msg.content) : escapeHtml(msg.content)}
+            <div style="font-size:11px; color:var(--text-tertiary); margin-top:6px">${formatTime(msg.created_at)}</div>
+          </div>
+        </div>
+      `).join('');
+
+      container.scrollTop = container.scrollHeight;
+    }
+
+    // ============================================
+    // 마크다운 렌더링 (간이)
+    // ============================================
+    function renderMarkdown(text) {
+      text = text.replace(/```(\w*)\n([\s\S]*?)```/g, (_, lang, code) => {
+        const escapedCode = escapeHtml(code.trim());
+        return `<div class="code-block-wrapper">
+          <div class="code-block-header"><span>${lang || 'code'}</span></div>
+          <pre><code>${escapedCode}</code></pre>
+        </div>`;
+      });
+
+      text = text.replace(/`([^`]+)`/g, '<code>$1</code>');
+      text = text.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+      text = text.replace(/\*(.+?)\*/g, '<em>$1</em>');
+      text = text.replace(/^### (.+)$/gm, '<h3>$1</h3>');
+      text = text.replace(/^## (.+)$/gm, '<h2>$1</h2>');
+      text = text.replace(/^- (.+)$/gm, '<li>$1</li>');
+      text = text.replace(/(<li>.*<\/li>\n?)+/g, '<ul>$&</ul>');
+      text = text.replace(/^\d+\. (.+)$/gm, '<li>$1</li>');
+      text = text.replace(/\n\n/g, '</p><p>');
+      text = text.replace(/\n/g, '<br>');
+
+      if (!text.startsWith('<')) {
+        text = '<p>' + text + '</p>';
+      }
+
+      return text;
+    }
+
+    // ============================================
+    // 유틸리티
+    // ============================================
+    function escapeHtml(str) {
+      const div = document.createElement('div');
+      div.textContent = str;
+      return div.innerHTML;
+    }
+
+    function formatTime(dateStr) {
+      if (!dateStr) return '';
+      const date = new Date(dateStr + 'Z');
+      const now = new Date();
+      const diff = (now - date) / 1000;
+
+      if (diff < 60) return '방금 전';
+      if (diff < 3600) return `${Math.floor(diff / 60)}분 전`;
+      if (diff < 86400) return `${Math.floor(diff / 3600)}시간 전`;
+
+      return date.toLocaleDateString('ko-KR', {
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+    }
+
+    // 초기화
+    init();
+  </script>
+</body>
+</html>

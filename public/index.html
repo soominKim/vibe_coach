@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>태재 바이브 코딩 아카데미 - 실습 도우미</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- 헤더 -->
+  <div class="header">
+    <div class="header-left">
+      <h1>태재 바이브 코딩 아카데미</h1>
+      <span class="badge">5회차 실습 도우미</span>
+    </div>
+    <div class="nickname-display" id="nicknameDisplay"></div>
+  </div>
+
+  <!-- 닉네임 입력 모달 -->
+  <div class="modal-overlay" id="nicknameModal">
+    <div class="modal">
+      <h2>환영합니다!</h2>
+      <p>실습 도우미에게 질문하려면 닉네임을 입력해주세요.</p>
+      <input type="text" id="nicknameInput" placeholder="닉네임 (예: 홍길동)" maxlength="20" autocomplete="off">
+      <button id="nicknameBtn" onclick="saveNickname()">시작하기</button>
+    </div>
+  </div>
+
+  <!-- 탭 네비게이션 -->
+  <div class="tabs">
+    <button class="tab active" data-tab="1" onclick="switchTab(1)">
+      <span class="tab-num">1</span>사용성 높이기
+    </button>
+    <button class="tab" data-tab="2" onclick="switchTab(2)">
+      <span class="tab-num">2</span>통제권 가져가기
+    </button>
+    <button class="tab" data-tab="3" onclick="switchTab(3)">
+      <span class="tab-num">3</span>대화형 UX
+    </button>
+  </div>
+
+  <!-- 채팅 영역 -->
+  <div class="chat-container">
+    <!-- 탭별 채팅 메시지 -->
+    <div class="chat-messages" id="messages-1">
+      <div class="welcome-message">
+        <div class="emoji">👋</div>
+        <h3>Task 1: 사용성 높이기</h3>
+        <p>Stitch, Figma, Jules, GitHub, Vercel 등 실습 중 궁금한 것이 있으면 자유롭게 질문하세요!</p>
+      </div>
+    </div>
+    <div class="chat-messages hidden" id="messages-2">
+      <div class="welcome-message">
+        <div class="emoji">🛠️</div>
+        <h3>Task 2: 통제권 가져가기</h3>
+        <p>PRD 작성, Replit Agent 활용 등 실습 중 궁금한 것이 있으면 자유롭게 질문하세요!</p>
+      </div>
+    </div>
+    <div class="chat-messages hidden" id="messages-3">
+      <div class="welcome-message">
+        <div class="emoji">💬</div>
+        <h3>Task 3: 대화형 UX</h3>
+        <p>웹툰 데이터, Gemini API, Antigravity 등 실습 중 궁금한 것이 있으면 자유롭게 질문하세요!</p>
+      </div>
+    </div>
+
+    <!-- 입력 영역 -->
+    <div class="chat-input-area">
+      <div class="chat-input-wrapper">
+        <textarea
+          class="chat-input"
+          id="chatInput"
+          placeholder="질문을 입력하세요... (Enter로 전송, Shift+Enter로 줄바꿈)"
+          rows="1"
+        ></textarea>
+        <button class="send-btn" id="sendBtn" onclick="sendMessage()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="22" y1="2" x2="11" y2="13"></line>
+            <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+          </svg>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ============================================
+    // 상태 관리
+    // ============================================
+    let sessionId = localStorage.getItem('sessionId');
+    let nickname = localStorage.getItem('nickname');
+    let currentTab = 1;
+    let isLoading = false;
+
+    // ============================================
+    // 초기화
+    // ============================================
+    function init() {
+      if (sessionId && nickname) {
+        document.getElementById('nicknameModal').classList.add('hidden');
+        document.getElementById('nicknameDisplay').textContent = nickname;
+      }
+
+      // Enter 키로 전송
+      const input = document.getElementById('chatInput');
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+          e.preventDefault();
+          sendMessage();
+        }
+      });
+
+      // textarea 자동 높이 조절
+      input.addEventListener('input', () => {
+        input.style.height = '46px';
+        input.style.height = Math.min(input.scrollHeight, 120) + 'px';
+      });
+    }
+
+    // ============================================
+    // 닉네임 저장
+    // ============================================
+    function saveNickname() {
+      const input = document.getElementById('nicknameInput');
+      const name = input.value.trim();
+      if (!name) {
+        input.focus();
+        return;
+      }
+
+      nickname = name;
+      sessionId = generateUUID();
+      localStorage.setItem('sessionId', sessionId);
+      localStorage.setItem('nickname', nickname);
+
+      document.getElementById('nicknameModal').classList.add('hidden');
+      document.getElementById('nicknameDisplay').textContent = nickname;
+    }
+
+    // 닉네임 입력에서 Enter 키
+    document.getElementById('nicknameInput').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') saveNickname();
+    });
+
+    // ============================================
+    // 탭 전환
+    // ============================================
+    function switchTab(tab) {
+      currentTab = tab;
+
+      // 탭 버튼 활성화
+      document.querySelectorAll('.tab').forEach((t) => {
+        t.classList.toggle('active', parseInt(t.dataset.tab) === tab);
+      });
+
+      // 메시지 영역 전환
+      for (let i = 1; i <= 3; i++) {
+        const el = document.getElementById(`messages-${i}`);
+        el.classList.toggle('hidden', i !== tab);
+      }
+
+      // 스크롤 하단으로
+      scrollToBottom();
+    }
+
+    // ============================================
+    // 메시지 전송
+    // ============================================
+    async function sendMessage() {
+      const input = document.getElementById('chatInput');
+      const message = input.value.trim();
+
+      if (!message || isLoading) return;
+      if (!sessionId || !nickname) {
+        document.getElementById('nicknameModal').classList.remove('hidden');
+        return;
+      }
+
+      // 입력 초기화
+      input.value = '';
+      input.style.height = '46px';
+
+      // 사용자 메시지 표시
+      appendMessage('user', message);
+
+      // 로딩 표시
+      isLoading = true;
+      updateSendButton();
+      const loadingEl = appendLoading();
+
+      try {
+        const res = await fetch('/api/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            sessionId,
+            nickname,
+            taskTab: currentTab,
+            message,
+          }),
+        });
+
+        const data = await res.json();
+
+        // 로딩 제거
+        loadingEl.remove();
+
+        if (res.ok) {
+          appendMessage('assistant', data.reply);
+        } else {
+          appendMessage('assistant', `오류가 발생했습니다: ${data.error}`);
+        }
+      } catch (error) {
+        loadingEl.remove();
+        appendMessage('assistant', '서버에 연결할 수 없습니다. 잠시 후 다시 시도해주세요.');
+      } finally {
+        isLoading = false;
+        updateSendButton();
+        input.focus();
+      }
+    }
+
+    // ============================================
+    // 메시지 렌더링
+    // ============================================
+    function appendMessage(role, content) {
+      const container = document.getElementById(`messages-${currentTab}`);
+
+      // 환영 메시지 제거
+      const welcome = container.querySelector('.welcome-message');
+      if (welcome) welcome.remove();
+
+      const div = document.createElement('div');
+      div.className = `message ${role}`;
+
+      const avatar = document.createElement('div');
+      avatar.className = 'message-avatar';
+      avatar.textContent = role === 'user' ? nickname[0] : 'AI';
+
+      const bubble = document.createElement('div');
+      bubble.className = 'message-bubble';
+
+      if (role === 'assistant') {
+        bubble.innerHTML = renderMarkdown(content);
+      } else {
+        bubble.textContent = content;
+      }
+
+      div.appendChild(avatar);
+      div.appendChild(bubble);
+      container.appendChild(div);
+
+      scrollToBottom();
+    }
+
+    function appendLoading() {
+      const container = document.getElementById(`messages-${currentTab}`);
+
+      const div = document.createElement('div');
+      div.className = 'message assistant';
+      div.id = 'loading-message';
+
+      const avatar = document.createElement('div');
+      avatar.className = 'message-avatar';
+      avatar.textContent = 'AI';
+
+      const bubble = document.createElement('div');
+      bubble.className = 'message-bubble';
+      bubble.innerHTML = '<div class="typing-indicator"><span></span><span></span><span></span></div>';
+
+      div.appendChild(avatar);
+      div.appendChild(bubble);
+      container.appendChild(div);
+
+      scrollToBottom();
+      return div;
+    }
+
+    function updateSendButton() {
+      const btn = document.getElementById('sendBtn');
+      btn.disabled = isLoading;
+    }
+
+    function scrollToBottom() {
+      const container = document.getElementById(`messages-${currentTab}`);
+      requestAnimationFrame(() => {
+        container.scrollTop = container.scrollHeight;
+      });
+    }
+
+    // ============================================
+    // 마크다운 렌더링 (간이)
+    // ============================================
+    function renderMarkdown(text) {
+      // 코드블록 처리 (```...```)
+      text = text.replace(/```(\w*)\n([\s\S]*?)```/g, (_, lang, code) => {
+        const escapedCode = escapeHtml(code.trim());
+        const langLabel = lang || 'code';
+        return `<div class="code-block-wrapper">
+          <div class="code-block-header">
+            <span>${langLabel}</span>
+            <button class="copy-btn" onclick="copyCode(this)">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+              복사
+            </button>
+          </div>
+          <pre><code>${escapedCode}</code></pre>
+        </div>`;
+      });
+
+      // 인라인 코드
+      text = text.replace(/`([^`]+)`/g, '<code>$1</code>');
+
+      // 굵게
+      text = text.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+
+      // 이탤릭
+      text = text.replace(/\*(.+?)\*/g, '<em>$1</em>');
+
+      // 헤더
+      text = text.replace(/^### (.+)$/gm, '<h3>$1</h3>');
+      text = text.replace(/^## (.+)$/gm, '<h2>$1</h2>');
+
+      // 순서 없는 목록
+      text = text.replace(/^- (.+)$/gm, '<li>$1</li>');
+      text = text.replace(/(<li>.*<\/li>\n?)+/g, '<ul>$&</ul>');
+
+      // 순서 있는 목록
+      text = text.replace(/^\d+\. (.+)$/gm, '<li>$1</li>');
+
+      // 줄바꿈
+      text = text.replace(/\n\n/g, '</p><p>');
+      text = text.replace(/\n/g, '<br>');
+
+      // 감싸기
+      if (!text.startsWith('<')) {
+        text = '<p>' + text + '</p>';
+      }
+
+      return text;
+    }
+
+    function escapeHtml(str) {
+      const div = document.createElement('div');
+      div.textContent = str;
+      return div.innerHTML;
+    }
+
+    // ============================================
+    // 코드 복사
+    // ============================================
+    function copyCode(btn) {
+      const codeBlock = btn.closest('.code-block-wrapper').querySelector('code');
+      const text = codeBlock.textContent;
+
+      navigator.clipboard.writeText(text).then(() => {
+        btn.classList.add('copied');
+        btn.innerHTML = `
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+          복사됨!
+        `;
+        setTimeout(() => {
+          btn.classList.remove('copied');
+          btn.innerHTML = `
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+            복사
+          `;
+        }, 2000);
+      });
+    }
+
+    // ============================================
+    // UUID 생성
+    // ============================================
+    function generateUUID() {
+      return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+        const r = (Math.random() * 16) | 0;
+        const v = c === 'x' ? r : (r & 0x3) | 0x8;
+        return v.toString(16);
+      });
+    }
+
+    // 초기화
+    init();
+  </script>
+</body>
+</html>
