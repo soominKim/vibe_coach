@@ -6,8 +6,6 @@ let initialized = false;
 function getDB() {
   if (!db) {
     const url = process.env.TURSO_DATABASE_URL || 'file:lab-assistant.db';
-    console.log('Turso URL:', url ? url.substring(0, 30) + '...' : 'MISSING');
-    console.log('Turso Token:', process.env.TURSO_AUTH_TOKEN ? 'SET' : 'MISSING');
     db = createClient({ url, authToken: process.env.TURSO_AUTH_TOKEN });
   }
   return db;
