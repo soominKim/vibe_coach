@@ -32,7 +32,7 @@ app.use(async (req, res, next) => {
     next();
   } catch (err) {
     console.error('DB init error:', err);
-    res.status(500).json({ error: 'DB 초기화 실패' });
+    res.status(500).json({ error: 'DB 초기화 실패: ' + err.message });
   }
 });
 

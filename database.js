@@ -16,26 +16,23 @@ function getDB() {
 async function initDB() {
   if (initialized) return;
   const client = getDB();
-  await client.executeMultiple(`
-    CREATE TABLE IF NOT EXISTS sessions (
+  await client.batch([
+    `CREATE TABLE IF NOT EXISTS sessions (
       id TEXT PRIMARY KEY,
       nickname TEXT NOT NULL,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    );
-
-    CREATE TABLE IF NOT EXISTS messages (
+    )`,
+    `CREATE TABLE IF NOT EXISTS messages (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       session_id TEXT NOT NULL,
-      task_tab INTEGER NOT NULL CHECK(task_tab IN (1, 2, 3)),
-      role TEXT NOT NULL CHECK(role IN ('user', 'assistant')),
+      task_tab INTEGER NOT NULL,
+      role TEXT NOT NULL,
       content TEXT NOT NULL,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (session_id) REFERENCES sessions(id)
-    );
-
-    CREATE INDEX IF NOT EXISTS idx_messages_session ON messages(session_id);
-    CREATE INDEX IF NOT EXISTS idx_messages_session_tab ON messages(session_id, task_tab);
-  `);
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )`,
+    `CREATE INDEX IF NOT EXISTS idx_messages_session ON messages(session_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_messages_session_tab ON messages(session_id, task_tab)`,
+  ], 'write');
   initialized = true;
 }
 
